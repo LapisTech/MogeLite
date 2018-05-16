@@ -10,8 +10,8 @@ function BrowserCheck()
 	if ( !( 'content' in document.createElement( 'template' ) ) ) { return false; }
 
 	// <dialog>
-	var dialog = <HTMLDialogElement>document.createElement( 'dialog' );
-	if ( typeof dialog.showModal !== 'function' || typeof dialog.close !== 'function' ) { return false; }
+	//var dialog = <HTMLDialogElement>document.createElement( 'dialog' );
+	//if ( typeof dialog.showModal !== 'function' || typeof dialog.close !== 'function' ) { return false; }
 
 	// Custom Elements.
 	if ( !( 'customElements' in window ) || typeof customElements.define !== 'function' ) { return false; }

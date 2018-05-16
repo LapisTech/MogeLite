@@ -748,6 +748,16 @@ class DrawCard {
     constructor(element) {
         this.element = element;
         this.unset();
+        this.endanimes = [];
+        element.addEventListener('transitionend', (event) => {
+            new Promise((resolve) => { });
+            while (0 < this.endanimes.length) {
+                const f = this.endanimes.shift();
+                if (f) {
+                    f(event);
+                }
+            }
+        }, false);
     }
     set(card) { this.element.dataset.card = card + ''; }
     unset() { this.element.dataset.card = ''; this.element.dataset.select = ''; }
@@ -757,6 +767,10 @@ class DrawCard {
     deselect() { this.element.dataset.select = ''; }
     selected() { return !!this.element.dataset.select; }
     order() { return this.element.dataset.select ? parseInt(this.element.dataset.select) : -1; }
+    swap(target) {
+        [this.element.dataset.card, target.element.dataset.card] = [target.element.dataset.card, this.element.dataset.card];
+        [this.element.dataset.select, target.element.dataset.select] = [target.element.dataset.select, this.element.dataset.select];
+    }
 }
 class CardManager {
     constructor(deck) {
@@ -854,11 +868,11 @@ class CardManager {
         }
     }
     select(index, select) {
-        const element = this._get(index);
-        if (!element) {
+        const card = this._get(index);
+        if (!card) {
             return false;
         }
-        if (!element.exist()) {
+        if (!card.exist()) {
             return false;
         }
         console.log('select:', index, select);
@@ -869,22 +883,23 @@ class CardManager {
                     ++count;
                 }
             }
-            if (element.selected() || 3 <= count) {
+            if (card.selected() || 3 <= count) {
                 return false;
             }
-            element.select(count);
+            card.select(count);
         }
-        else if (element.selected()) {
-            const count = element.order();
+        else if (card.selected()) {
+            const count = card.order();
             for (let i = 0; i < this.hand.length; ++i) {
-                if (this.hand[i].selected()) {
-                    const n = this.hand[i].order();
-                    if (count <= n) {
-                        this.hand[i].select(n - 1);
-                    }
+                if (!this.hand[i].selected()) {
+                    continue;
+                }
+                const n = this.hand[i].order();
+                if (count <= n) {
+                    this.hand[i].select(n - 1);
                 }
             }
-            element.deselect();
+            card.deselect();
         }
         return true;
     }
@@ -1185,10 +1200,6 @@ function BrowserCheck() {
         return false;
     }
     if (!('content' in document.createElement('template'))) {
-        return false;
-    }
-    var dialog = document.createElement('dialog');
-    if (typeof dialog.showModal !== 'function' || typeof dialog.close !== 'function') {
         return false;
     }
     if (!('customElements' in window) || typeof customElements.define !== 'function') {
