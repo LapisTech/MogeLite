@@ -1,0 +1,34 @@
+{
+  "name": "mogelite",
+  "version": "1.0.0",
+  "description": "* Noto Color Emoji\r     * https://github.com/googlei18n/noto-emoji",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "map": "node charmap.js",
+    "build:js": "tsc -p src/site",
+    "build:wasm": "asc --noRuntime -o docs/libs.wasm src/wasm/main.ts",
+    "build:css": "lessc --clean-css src/style/main.less docs/style.css",
+    "localize": "node node_modules/localizecss/dest/localizecss.js -d default",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LapisTech/MogeLite.git"
+  },
+  "author": "Hiroki",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/LapisTech/MogeLite/issues"
+  },
+  "homepage": "https://github.com/LapisTech/MogeLite#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "localizecss": "git+https://github.com/HirokiMiyaoka/LocalizeCSS#master",
+    "assemblyscript": "^0.3.0",
+    "clean-css": "^4.1.11",
+    "less": "^3.0.4"
+  }
+}
