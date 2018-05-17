@@ -43,6 +43,16 @@ function BrowserCheck()
 	return true;
 }
 
+function DisableDoubleTapScaling()
+{
+	let t = 0;
+	document.body.addEventListener( 'touchend', ( event ) =>
+	{
+		if ( Date.now() - t < 100 ) { event.preventDefault(); return; }
+		t = Date.now();
+	}, true);
+}
+
 function Localize( lang?: string )
 {
 	if ( !lang ) { lang = navigator.language; }
@@ -84,6 +94,7 @@ document.addEventListener( 'DOMContentLoaded', () =>
 
 	(<HTMLElement>document.getElementById( 'legacy' )).classList.remove( 'show' );
 
+	DisableDoubleTapScaling();
 	/*if ( location.protocol === 'https' )
 	{
 		navigator.serviceWorker.register( '/sw.js?1', { scope: '/' } );

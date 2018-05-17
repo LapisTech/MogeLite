@@ -45,6 +45,13 @@ class DrawCard
 		[ this.element.dataset.card, target.element.dataset.card ] = [ target.element.dataset.card, this.element.dataset.card ];
 		[ this.element.dataset.select, target.element.dataset.select ] = [ target.element.dataset.select, this.element.dataset.select ];
 	}
+
+	public backup() { return { card: this.element.dataset.card || '', select: this.element.dataset.select || '' }; }
+	public restore( data: { card: string, select: string } )
+	{
+		this.element.dataset.card = data.card;
+		this.element.dataset.select = data.select;
+	}
 }
 
 class CardManager
@@ -87,6 +94,7 @@ class CardManager
 
 	public draw()
 	{
+		this.arrange();
 		let i: number;
 		for ( i = 0 ; i < this.hand.length ; ++i )
 		{
@@ -135,14 +143,14 @@ class CardManager
 	{
 		const card = this._get( index );
 		if ( !card ) { return Promise.reject( 'Invalid index.' ); }
-		const order = card.order();
-		if ( order < 0 ) { return Promise.reject( 'Notfound.' ); }
+		const cardnum = card.order();
+		if ( cardnum < 0 ) { return Promise.reject( 'Notfound.' ); }
 
 		return new Promise<CARD_JSON>( ( resolve, reject ) =>
 		{
 			// TODO: transitionend
 			card.unset();
-			resolve( this.deck[ order ] );
+			resolve( this.deck[ cardnum ] );
 		} );
 	}
 
@@ -154,10 +162,30 @@ class CardManager
 			for ( let j = i + 1 ; j < this.hand.length ; ++j )
 			{
 				if ( !this.hand[ j ].exist() ) { continue; }
-				this.hand[ i ].set( this.hand[ j ].card() );
-				this.hand[ j ].unset();
+				//this.hand[ i ].set( this.hand[ j ].card() );
+				//this.hand[ j ].unset();
+				this.hand[ i ].swap( this.hand[ j ] );
 				break;
 			}
+		}
+	}
+
+	public behind( index: number )
+	{
+		// Del first and add last.
+
+		const card = this._get( index );
+		if ( !card ) { return false; }
+		if ( !card.exist() ) { return false; }
+
+		const backup = card.backup();
+		card.unset();
+		this.arrange();
+		for ( let i = index ; i < this.hand.length ; ++i )
+		{
+			if ( this.hand[ i ].exist() ) { continue; }
+			this.hand[ i ].restore( backup );
+			break;
 		}
 	}
 
@@ -210,6 +238,21 @@ console.log('select:',index,select);
 		}
 		return count;
 	}
+
+	public hands()
+	{
+		let count = 0;
+		for ( let i = 0 ; i < this.hand.length ; ++i )
+		{
+			if ( this.hand[ i ].exist() ) { ++count; }
+		}
+		return count;
+	}
+
+	public empty()
+	{
+		return this.size() <= 0 && this.hands() <= 0;
+	}
 }
 
 class ActionButtons
@@ -244,7 +287,7 @@ class ActionButtons
 	public update( cm: CardManager )
 	{
 		this.quantity.textContent = cm.size() + '';
-		if ( cm.selected() <= 0 )
+		if ( cm.empty() )
 		{
 			this.buttons.classList.remove( 'move' );
 		} else
@@ -282,12 +325,27 @@ class Dungeon
 
 	}
 
+	private isFlick( begin: Event, end: Event )
+	{
+		const flick = Common.flick( begin, end );// TODO: distance
+console.log(flick,flick.direction,Number.isNaN( flick.direction ));
+		return !Number.isNaN( flick.direction );
+	}
+
 	public initCardAction( element: HTMLElement, index: number )
 	{
 		this.cards.push( element );
-		Common.addTap( element, 500, () =>
+		Common.addTap( element, 500, ( data ) =>
 		{
-			this.selectCard( index );
+			if ( this.isFlick( data.begin, data.end ) )
+			{
+console.log('Flick');
+				this.cm.behind( index );
+			} else
+			{
+console.log('Select');
+				this.selectCard( index );
+			}
 		}, () =>
 		{
 			if ( element.dataset.select )
@@ -356,6 +414,10 @@ this.hand.classList.remove( 'hide' );
 	public move( direction: number )
 	{
 console.log( 'move:', direction );
+
+
+		if ( this.cm.selected() <= 0 ) { this.cm.select( 0, true ); }
+
 
 		this.cm.useFirst().then( ( card ) =>
 		{

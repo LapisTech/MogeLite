@@ -36,15 +36,17 @@ class Common {
     }
     static addTap(element, time, ontap, onlongtap) {
         let begin = 0;
+        let prev;
         let timer;
         element.addEventListener('touchstart', (event) => {
             if (0 < begin) {
                 return;
             }
             begin = Date.now();
+            prev = event;
             timer = setTimeout(() => { if (0 < begin) {
                 begin = 0;
-                onlongtap(event);
+                onlongtap({ begin: prev, end: event, touch: true });
             } timer = 0; }, time);
         }, false);
         element.addEventListener('touchend', (event) => {
@@ -56,10 +58,10 @@ class Common {
             begin = 0;
             clearTimeout(timer);
             if (time <= t) {
-                onlongtap(event);
+                onlongtap({ begin: prev, end: event, touch: true });
             }
             else {
-                ontap(event);
+                ontap({ begin: prev, end: event, touch: true });
             }
         });
         element.addEventListener('mousedown', (event) => {
@@ -67,9 +69,10 @@ class Common {
                 return;
             }
             begin = Date.now();
+            prev = event;
             timer = setTimeout(() => { if (0 < begin) {
                 begin = 0;
-                onlongtap(event);
+                onlongtap({ begin: prev, end: event, touch: false });
             } timer = 0; }, time);
         }, false);
         element.addEventListener('mouseup', (event) => {
@@ -80,12 +83,27 @@ class Common {
             begin = 0;
             clearTimeout(timer);
             if (time <= t) {
-                onlongtap(event);
+                onlongtap({ begin: prev, end: event, touch: false });
             }
             else {
-                ontap(event);
+                ontap({ begin: prev, end: event, touch: false });
             }
         });
+    }
+    static getPoint(event, key) {
+        if (key && event[key]) {
+            return event[key][0];
+        }
+        return event;
+    }
+    static flick(begin, end, distance = 20) {
+        const p0 = this.getPoint(begin, 'touches');
+        const p1 = this.getPoint(end, 'changedTouches');
+        const data = { begin: p0, end: p1, vec: { x: p1.pageX - p0.pageX, y: p1.pageY - p0.pageY }, direction: NaN };
+        if (distance * distance <= data.vec.x * data.vec.x + data.vec.y * data.vec.y) {
+            data.direction = Math.atan2(data.vec.y, data.vec.x);
+        }
+        return data;
     }
     static shuffle(list) {
         let n = list.length;
@@ -771,6 +789,11 @@ class DrawCard {
         [this.element.dataset.card, target.element.dataset.card] = [target.element.dataset.card, this.element.dataset.card];
         [this.element.dataset.select, target.element.dataset.select] = [target.element.dataset.select, this.element.dataset.select];
     }
+    backup() { return { card: this.element.dataset.card || '', select: this.element.dataset.select || '' }; }
+    restore(data) {
+        this.element.dataset.card = data.card;
+        this.element.dataset.select = data.select;
+    }
 }
 class CardManager {
     constructor(deck) {
@@ -796,6 +819,7 @@ class CardManager {
         }
     }
     draw() {
+        this.arrange();
         let i;
         for (i = 0; i < this.hand.length; ++i) {
             if (this.hand[i].exist()) {
@@ -843,13 +867,13 @@ class CardManager {
         if (!card) {
             return Promise.reject('Invalid index.');
         }
-        const order = card.order();
-        if (order < 0) {
+        const cardnum = card.order();
+        if (cardnum < 0) {
             return Promise.reject('Notfound.');
         }
         return new Promise((resolve, reject) => {
             card.unset();
-            resolve(this.deck[order]);
+            resolve(this.deck[cardnum]);
         });
     }
     arrange() {
@@ -861,10 +885,28 @@ class CardManager {
                 if (!this.hand[j].exist()) {
                     continue;
                 }
-                this.hand[i].set(this.hand[j].card());
-                this.hand[j].unset();
+                this.hand[i].swap(this.hand[j]);
                 break;
             }
+        }
+    }
+    behind(index) {
+        const card = this._get(index);
+        if (!card) {
+            return false;
+        }
+        if (!card.exist()) {
+            return false;
+        }
+        const backup = card.backup();
+        card.unset();
+        this.arrange();
+        for (let i = index; i < this.hand.length; ++i) {
+            if (this.hand[i].exist()) {
+                continue;
+            }
+            this.hand[i].restore(backup);
+            break;
         }
     }
     select(index, select) {
@@ -919,6 +961,18 @@ class CardManager {
         }
         return count;
     }
+    hands() {
+        let count = 0;
+        for (let i = 0; i < this.hand.length; ++i) {
+            if (this.hand[i].exist()) {
+                ++count;
+            }
+        }
+        return count;
+    }
+    empty() {
+        return this.size() <= 0 && this.hands() <= 0;
+    }
 }
 CardManager.HAND_MAX = 4;
 class ActionButtons {
@@ -941,7 +995,7 @@ class ActionButtons {
     }
     update(cm) {
         this.quantity.textContent = cm.size() + '';
-        if (cm.selected() <= 0) {
+        if (cm.empty()) {
             this.buttons.classList.remove('move');
         }
         else {
@@ -966,10 +1020,22 @@ class Dungeon {
             this.initCardAction(cards[i], i);
         }
     }
+    isFlick(begin, end) {
+        const flick = Common.flick(begin, end);
+        console.log(flick, flick.direction, Number.isNaN(flick.direction));
+        return !Number.isNaN(flick.direction);
+    }
     initCardAction(element, index) {
         this.cards.push(element);
-        Common.addTap(element, 500, () => {
-            this.selectCard(index);
+        Common.addTap(element, 500, (data) => {
+            if (this.isFlick(data.begin, data.end)) {
+                console.log('Flick');
+                this.cm.behind(index);
+            }
+            else {
+                console.log('Select');
+                this.selectCard(index);
+            }
         }, () => {
             if (element.dataset.select) {
                 this.deselectCard(index);
@@ -1031,6 +1097,9 @@ class Dungeon {
     }
     move(direction) {
         console.log('move:', direction);
+        if (this.cm.selected() <= 0) {
+            this.cm.select(0, true);
+        }
         this.cm.useFirst().then((card) => {
             console.log(card);
             this.dungeon.action(direction, card);
@@ -1219,6 +1288,16 @@ function BrowserCheck() {
     }
     return true;
 }
+function DisableDoubleTapScaling() {
+    let t = 0;
+    document.body.addEventListener('touchend', (event) => {
+        if (Date.now() - t < 100) {
+            event.preventDefault();
+            return;
+        }
+        t = Date.now();
+    }, true);
+}
 function Localize(lang) {
     if (!lang) {
         lang = navigator.language;
@@ -1261,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
     document.getElementById('legacy').classList.remove('show');
+    DisableDoubleTapScaling();
     const cate = {
         0: 'all',
         1: 'common',
