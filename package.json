@@ -29,6 +29,7 @@
     "localizecss": "git+https://github.com/HirokiMiyaoka/LocalizeCSS#master",
     "assemblyscript": "^0.3.0",
     "clean-css": "^4.1.11",
+    "uglify-es": "^3.3.9",
     "less": "^3.0.4"
   }
 }
