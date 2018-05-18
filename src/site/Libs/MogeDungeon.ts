@@ -67,9 +67,9 @@ for ( let y = 0 ; y < this.bitmap.height() ; ++y )
 		}
 	}
 
-	public update()
+	public update( stop = false )
 	{
-
+		return Common.sleep( 1000 );
 	}
 
 	public _render( e: HTMLElement )

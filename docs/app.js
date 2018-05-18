@@ -116,6 +116,11 @@ class Common {
         }
         return list;
     }
+    static sleep(msec) {
+        return new Promise((resolve, reject) => {
+            setTimeout(resolve, msec);
+        });
+    }
 }
 class API {
     static get(url) {
@@ -707,7 +712,8 @@ class MogeDungeon {
             this.chara.move(sx, sy);
         }
     }
-    update() {
+    update(stop = false) {
+        return Common.sleep(1000);
     }
     _render(e) {
         const map = this.bitmap.getBits().map((b) => { return b ? '.' : ' '; });
@@ -742,6 +748,53 @@ class Chip {
         chip.style.top = (this.y * 10) + '%';
     }
 }
+class CSSAnime {
+    constructor(element) {
+        this.element = element;
+        this.endanimes = [];
+        element.addEventListener('transitionend', (event) => {
+            while (0 < this.endanimes.length) {
+                const f = this.endanimes.shift();
+                if (f) {
+                    f(event);
+                }
+            }
+        }, false);
+    }
+    play(exec) {
+        return new Promise((resolve, reject) => {
+            this.endanimes.push(resolve);
+            if (exec) {
+                exec();
+            }
+        });
+    }
+    continuouslyChangeClass(...argv) {
+        return argv.reduce((prev, current) => {
+            return prev.then(() => {
+                if (!current.add && !current.remove || current.time) {
+                    console.log('change class(time):', current);
+                    if (current.add) {
+                        this.element.classList.add(...current.add);
+                    }
+                    if (current.remove) {
+                        this.element.classList.remove(...current.remove);
+                    }
+                    return Common.sleep(current.time || 100).then(() => { return document.createEvent('transitionevent'); });
+                }
+                return this.play(() => {
+                    console.log('change class:', current);
+                    if (current.add) {
+                        this.element.classList.add(...current.add);
+                    }
+                    if (current.remove) {
+                        this.element.classList.remove(...current.remove);
+                    }
+                });
+            });
+        }, Promise.resolve(document.createEvent('transitionevent')));
+    }
+}
 class Top {
     constructor(config, app) {
         config.login.addEventListener('click', () => { app.nextHome(config.top); }, false);
@@ -763,23 +816,40 @@ class Home {
     update(data) {
     }
 }
+const LONG_TAP = 500;
 class DrawCard {
     constructor(element) {
         this.element = element;
-        this.unset();
-        this.endanimes = [];
-        element.addEventListener('transitionend', (event) => {
-            new Promise((resolve) => { });
-            while (0 < this.endanimes.length) {
-                const f = this.endanimes.shift();
-                if (f) {
-                    f(event);
-                }
-            }
-        }, false);
+        this.anime = new CSSAnime(this.element);
+        this._unset();
     }
-    set(card) { this.element.dataset.card = card + ''; }
-    unset() { this.element.dataset.card = ''; this.element.dataset.select = ''; }
+    set(card, noanime = false) {
+        if (this.element.dataset.card) {
+            noanime = true;
+        }
+        this.element.dataset.card = card + '';
+        if (noanime) {
+            return Promise.resolve('');
+        }
+        return this.anime.continuouslyChangeClass({ add: ['fadein'], time: 100 }, { add: ['start'] }, { add: ['end'] }, {}).then(() => {
+            this.element.classList.remove('fadein', 'start', 'end');
+            return this.element.dataset.card;
+        });
+    }
+    _unset() {
+        this.element.dataset.card = '';
+        this.element.dataset.select = '';
+    }
+    unset() {
+        if (!this.element.dataset.card) {
+            return Promise.resolve('');
+        }
+        return this.anime.continuouslyChangeClass({ add: ['fadeout', 'start'] }, { add: ['end'] }, {}).then(() => {
+            this._unset();
+            this.element.classList.remove('fadeout', 'start', 'end');
+            return '';
+        });
+    }
     exist() { return !!this.element.dataset.card; }
     card() { return this.element.dataset.card ? parseInt(this.element.dataset.card) : -1; }
     select(order) { this.element.dataset.select = order + ''; }
@@ -792,8 +862,8 @@ class DrawCard {
     }
     backup() { return { card: this.element.dataset.card || '', select: this.element.dataset.select || '' }; }
     restore(data) {
-        this.element.dataset.card = data.card;
         this.element.dataset.select = data.select;
+        return this.set(parseInt(data.card));
     }
 }
 class CardManager {
@@ -806,20 +876,22 @@ class CardManager {
         this.deck.push(card);
         this.stack.push(this.deck.length - 1);
         Common.shuffle(this.stack);
+        return Promise.resolve('ok');
     }
     init(hand) {
         this.hand = hand.map((element) => { return new DrawCard(element); });
-        CardManager.HAND_MAX = this.hand.length;
     }
     reload() {
         this.stack = this.deck.map((c, index) => { return index; });
         Common.shuffle(this.stack);
         this.hand.forEach((c) => { c.unset(); });
+        const l = [];
         for (let i = 0; i < CardManager.HAND_MAX; ++i) {
-            this.draw();
+            l.push(i);
         }
+        return l.reduce((prev) => { return prev.then(() => { return this.draw(true); }); }, Promise.resolve(''));
     }
-    draw() {
+    draw(noanime = false) {
         this.arrange();
         let i;
         for (i = 0; i < this.hand.length; ++i) {
@@ -829,24 +901,26 @@ class CardManager {
             break;
         }
         if (this.hand.length <= i) {
-            return false;
+            return Promise.reject('');
         }
         Common.shuffle(this.stack);
         const card = this.stack.shift();
         if (card === undefined) {
-            return false;
+            return Promise.reject('');
         }
-        this.hand[i].set(card);
-        return true;
+        return this.hand[i].set(card, noanime);
     }
     drawFull() {
         this.arrange();
-        for (let i = 0; i < this.hand.length; ++i) {
+        for (let i = 0; i < CardManager.HAND_MAX; ++i) {
             if (this.hand[i].exist()) {
                 continue;
             }
-            this.draw();
+            return this.draw().then(() => {
+                return this.drawFull();
+            });
         }
+        return Promise.resolve('ok');
     }
     useFirst() {
         let index = -1;
@@ -872,9 +946,8 @@ class CardManager {
         if (cardnum < 0) {
             return Promise.reject('Notfound.');
         }
-        return new Promise((resolve, reject) => {
-            card.unset();
-            resolve(this.deck[cardnum]);
+        return card.unset().then(() => {
+            return this.deck[cardnum];
         });
     }
     arrange() {
@@ -894,31 +967,31 @@ class CardManager {
     behind(index) {
         const card = this._get(index);
         if (!card) {
-            return false;
+            return Promise.reject('');
         }
         if (!card.exist()) {
-            return false;
+            return Promise.reject('');
         }
         const backup = card.backup();
-        card.unset();
-        this.arrange();
-        for (let i = index; i < this.hand.length; ++i) {
-            if (this.hand[i].exist()) {
-                continue;
+        return card.unset().then(() => {
+            this.arrange();
+            for (let i = index; i < this.hand.length; ++i) {
+                if (this.hand[i].exist()) {
+                    continue;
+                }
+                return this.hand[i].restore(backup);
             }
-            this.hand[i].restore(backup);
-            break;
-        }
+            return 'ok';
+        });
     }
     select(index, select) {
         const card = this._get(index);
         if (!card) {
-            return false;
+            return Promise.reject('');
         }
         if (!card.exist()) {
-            return false;
+            return Promise.reject('');
         }
-        console.log('select:', index, select);
         if (select) {
             let count = 0;
             for (let i = 0; i < this.hand.length; ++i) {
@@ -927,7 +1000,7 @@ class CardManager {
                 }
             }
             if (card.selected() || 3 <= count) {
-                return false;
+                return Promise.reject('');
             }
             card.select(count);
         }
@@ -944,7 +1017,7 @@ class CardManager {
             }
             card.deselect();
         }
-        return true;
+        return Promise.resolve('ok');
     }
     _get(index) {
         if (index < 0 || this.hand.length <= index) {
@@ -986,11 +1059,12 @@ class ActionButtons {
         const u = buttons.querySelector('.crosskey .u');
         const d = buttons.querySelector('.crosskey .d');
         const w = buttons.querySelector('.crosskey .w');
-        Common.addClick(l, () => { this.move(8); });
-        Common.addClick(r, () => { this.move(2); });
-        Common.addClick(u, () => { this.move(1); });
-        Common.addClick(d, () => { this.move(4); });
-        Common.addClick(w, () => { dungeon.nextTurn(); });
+        const wait = () => { dungeon.nextTurn(); };
+        Common.addTap(l, LONG_TAP * 2, () => { this.move(8); }, wait);
+        Common.addTap(r, LONG_TAP * 2, () => { this.move(2); }, wait);
+        Common.addTap(u, LONG_TAP * 2, () => { this.move(1); }, wait);
+        Common.addTap(d, LONG_TAP * 2, () => { this.move(4); }, wait);
+        Common.addClick(w, wait);
         const reload = buttons.querySelector('.reload');
         Common.addClick(reload, () => { dungeon.reload(); });
     }
@@ -1012,6 +1086,7 @@ class ActionButtons {
 }
 class Dungeon {
     constructor(config) {
+        this.main = config.dungeon;
         this.map = config.dungeon.querySelector('.map');
         this.hand = config.dungeon.querySelector('.hand');
         this.buttons = new ActionButtons(this, config.dungeon.querySelector('.buttons'));
@@ -1021,6 +1096,9 @@ class Dungeon {
             this.initCardAction(cards[i], i);
         }
     }
+    input(enable) {
+        this.main.classList[enable ? 'remove' : 'add']('disable');
+    }
     isFlick(begin, end) {
         const flick = Common.flick(begin, end);
         console.log(flick, flick.direction, Number.isNaN(flick.direction));
@@ -1028,7 +1106,7 @@ class Dungeon {
     }
     initCardAction(element, index) {
         this.cards.push(element);
-        Common.addTap(element, 500, (data) => {
+        Common.addTap(element, LONG_TAP, (data) => {
             if (this.isFlick(data.begin, data.end)) {
                 console.log('Flick');
                 this.cm.behind(index);
@@ -1047,6 +1125,7 @@ class Dungeon {
         });
     }
     init(cm) {
+        this.input(false);
         this.cm = cm;
         cm.init(this.cards);
     }
@@ -1076,39 +1155,50 @@ class Dungeon {
         this.hand.classList.add('hide');
     }
     nextTurn() {
-        if (!this.cm.draw()) {
-            this.reload();
-        }
-        this.dungeon.update();
-        this.dungeon._render(this.map);
+        this.input(false);
+        return this.cm.draw().catch(() => {
+            return this.cm.empty() ? this.reload() : Promise.resolve();
+        }).then(() => {
+            this.dungeon.update();
+            this.dungeon._render(this.map);
+            this.input(true);
+            return 'ok';
+        });
     }
     reload() {
-        this.cm.reload();
-        this.buttons.update(this.cm);
+        this.input(false);
+        return this.cm.reload().then(() => {
+            this.buttons.update(this.cm);
+            this.input(true);
+        });
     }
     draw() {
-        if (this.cm.size() <= 0) {
-            this.cm.drawFull();
-        }
-        else {
-            this.cm.draw();
-        }
-        this.buttons.update(this.cm);
-        this.hand.classList.remove('hide');
+        this.input(false);
+        const p = (this.cm.size() <= 0) ? this.cm.drawFull() : this.cm.draw();
+        return p.catch(() => { return ''; }).then(() => {
+            this.buttons.update(this.cm);
+            this.input(true);
+            this.hand.classList.remove('hide');
+        });
     }
     move(direction) {
         console.log('move:', direction);
+        this.input(false);
         if (this.cm.selected() <= 0) {
             this.cm.select(0, true);
         }
         this.cm.useFirst().then((card) => {
             console.log(card);
             this.dungeon.action(direction, card);
-            if (this.cm.selected() <= 0) {
-                this.draw();
-            }
-            this.dungeon._render(this.map);
+            this.dungeon.update(0 < this.cm.selected()).then(() => {
+                if (this.cm.selected() <= 0) {
+                    this.draw();
+                }
+                this.input(true);
+                this.dungeon._render(this.map);
+            });
         }).catch((error) => {
+            this.input(true);
             console.log(error);
             this.draw();
             this.dungeon._render(this.map);
@@ -1243,17 +1333,17 @@ class App {
         this.hidePage(hide);
         const deck = [];
         deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
-        deck.push({ id: 0, cate: 0, name: 'a', data: { lv: [1] } });
+        deck.push({ id: 1, cate: 0, name: 'b', data: { lv: [1] } });
+        deck.push({ id: 3, cate: 0, name: 'c', data: { lv: [1] } });
+        deck.push({ id: 4, cate: 0, name: 'd', data: { lv: [1] } });
+        deck.push({ id: 5, cate: 0, name: 'e', data: { lv: [1] } });
+        deck.push({ id: 6, cate: 0, name: 'f', data: { lv: [1] } });
+        deck.push({ id: 7, cate: 0, name: 'g', data: { lv: [1] } });
+        deck.push({ id: 8, cate: 0, name: 'h', data: { lv: [1] } });
+        deck.push({ id: 9, cate: 0, name: 'i', data: { lv: [1] } });
         const cm = new CardManager(deck);
         this.dungeon.init(cm);
-        setTimeout(() => { cm.reload(); }, 1000);
+        setTimeout(() => { cm.reload().then(() => { this.dungeon.input(true); }); }, 500);
         this.dungeon.render(new MogeDungeon().init());
     }
     nextBar(hide) {

@@ -3,35 +3,58 @@ interface DungeonConfig
 	dungeon: HTMLElement,
 }
 
+const LONG_TAP = 500;
+
 class DrawCard
 {
 	private element: HTMLElement;
-	private endanimes: ( ( value?: {} ) => void )[];
+	private anime: CSSAnime;
 
 	constructor( element: HTMLElement )
 	{
 		this.element = element;
-		this.unset();
-		this.endanimes = [];
-		element.addEventListener( 'transitionend', ( event ) =>
-		{
-			new Promise((resolve)=>{});
-			while ( 0 < this.endanimes.length )
-			{
-				const f = this.endanimes.shift();
-				if ( f ) { f( event ); }
-			}
-		}, false );
+		this.anime = new CSSAnime( this.element );
+		this._unset();
 	}
 
-	public set( card: number ) { this.element.dataset.card = card + ''; }
+	// Card methods
+	public set( card: number, noanime = false )
+	{
+		if ( this.element.dataset.card ) { noanime = true; }
+		this.element.dataset.card = card + '';
+		if ( noanime )
+		{
+			return Promise.resolve( '' );
+		}
+		return this.anime.continuouslyChangeClass( { add: [ 'fadein' ], time: 100 }, { add: [ 'start' ] }, { add: [ 'end' ] }, {} ).then( () =>
+		{
+			this.element.classList.remove( 'fadein', 'start', 'end' );
+			return <string>this.element.dataset.card;
+		} );
+	}
 
-	public unset() { this.element.dataset.card = ''; this.element.dataset.select = ''; }
+	public _unset()
+	{
+		this.element.dataset.card = '';
+		this.element.dataset.select = '';
+	}
+
+	public unset()
+	{
+		if ( !this.element.dataset.card ) { return Promise.resolve( '' ); }
+		return this.anime.continuouslyChangeClass( { add: [ 'fadeout', 'start' ] }, { add: [ 'end' ] }, {} ).then( () =>
+		{
+			this._unset();
+			this.element.classList.remove( 'fadeout', 'start', 'end' );
+			return '';
+		} );
+	}
 
 	public exist() { return !!this.element.dataset.card; }
 
 	public card() { return this.element.dataset.card ? parseInt( this.element.dataset.card ) : -1; }
 
+	// Select methods.
 	public select( order: number ) { this.element.dataset.select = order + ''; }
 
 	public deselect() { this.element.dataset.select = ''; }
@@ -40,6 +63,7 @@ class DrawCard
 
 	public order() { return this.element.dataset.select ? parseInt( this.element.dataset.select ) : -1; }
 
+	// Other
 	public swap( target: DrawCard )
 	{
 		[ this.element.dataset.card, target.element.dataset.card ] = [ target.element.dataset.card, this.element.dataset.card ];
@@ -49,8 +73,9 @@ class DrawCard
 	public backup() { return { card: this.element.dataset.card || '', select: this.element.dataset.select || '' }; }
 	public restore( data: { card: string, select: string } )
 	{
-		this.element.dataset.card = data.card;
+		//this.element.dataset.card = data.card;
 		this.element.dataset.select = data.select;
+		return this.set( parseInt( data.card ) );
 	}
 }
 
@@ -73,13 +98,13 @@ class CardManager
 		this.deck.push( card );
 		this.stack.push( this.deck.length - 1 );
 		Common.shuffle( this.stack );
+
+		return Promise.resolve( 'ok' );
 	}
 
 	public init( hand: HTMLElement[] )
 	{
 		this.hand = hand.map( ( element ) => { return new DrawCard( element ); } );
-
-		CardManager.HAND_MAX = this.hand.length;
 	}
 
 	public reload()
@@ -89,10 +114,15 @@ class CardManager
 
 		this.hand.forEach( ( c ) => { c.unset(); } );
 
-		for ( let i = 0 ; i < CardManager.HAND_MAX ; ++i ) { this.draw(); }
+		//for ( let i = 0 ; i < CardManager.HAND_MAX ; ++i ) { this.draw(); }
+		//return Promise.resolve( 'ok' );
+		const l: number[] = [];
+		for ( let i = 0 ; i < CardManager.HAND_MAX ; ++i ) { l.push( i ); }
+
+		return l.reduce( ( prev ) => { return prev.then( () => { return this.draw( true ); } ); }, Promise.resolve( '' ) );
 	}
 
-	public draw()
+	public draw( noanime = false )
 	{
 		this.arrange();
 		let i: number;
@@ -101,27 +131,29 @@ class CardManager
 			if ( this.hand[ i ].exist() ) { continue; }
 			break;
 		}
-		if ( this.hand.length <= i ) { return false; }
+		if ( this.hand.length <= i ) { return Promise.reject( '' ); }
 
 		// データを見ていてもいいように引く直前にシャッフル
 		Common.shuffle( this.stack );
 		const card = this.stack.shift();
 
-		if ( card === undefined ) { return false; }
+		if ( card === undefined ) { return Promise.reject( '' ); }
 
-		this.hand[ i ].set( card );
-
-		return true;
+		return this.hand[ i ].set( card, noanime );
 	}
 
-	public drawFull()
+	public drawFull(): Promise<string>
 	{
 		this.arrange();
-		for ( let i = 0 ; i < this.hand.length ; ++i )
+		for ( let i = 0 ; i < CardManager.HAND_MAX ; ++i )
 		{
 			if ( this.hand[ i ].exist() ) { continue; }
-			this.draw();
+			return this.draw().then( () =>
+			{
+				return this.drawFull();
+			} );
 		}
+		return Promise.resolve( 'ok' );
 	}
 
 	public useFirst()
@@ -146,11 +178,9 @@ class CardManager
 		const cardnum = card.order();
 		if ( cardnum < 0 ) { return Promise.reject( 'Notfound.' ); }
 
-		return new Promise<CARD_JSON>( ( resolve, reject ) =>
+		return card.unset().then( () =>
 		{
-			// TODO: transitionend
-			card.unset();
-			resolve( this.deck[ cardnum ] );
+			return this.deck[ cardnum ];
 		} );
 	}
 
@@ -175,27 +205,28 @@ class CardManager
 		// Del first and add last.
 
 		const card = this._get( index );
-		if ( !card ) { return false; }
-		if ( !card.exist() ) { return false; }
+		if ( !card ) { return Promise.reject( '' ); }
+		if ( !card.exist() ) { return Promise.reject( '' ); }
 
 		const backup = card.backup();
-		card.unset();
-		this.arrange();
-		for ( let i = index ; i < this.hand.length ; ++i )
+		return card.unset().then( () =>
 		{
-			if ( this.hand[ i ].exist() ) { continue; }
-			this.hand[ i ].restore( backup );
-			break;
-		}
+			this.arrange();
+			for ( let i = index ; i < this.hand.length ; ++i )
+			{
+				if ( this.hand[ i ].exist() ) { continue; }
+				return this.hand[ i ].restore( backup );
+			}
+			return 'ok';
+		} );
 	}
 
 	public select( index: number, select: boolean )
 	{
 		const card = this._get( index );
-		if ( !card ) { return false; }
-		if ( !card.exist() ) { return false; }
+		if ( !card ) { return Promise.reject( '' ); }
+		if ( !card.exist() ) { return Promise.reject( '' ); }
 
-console.log('select:',index,select);
 		if ( select )
 		{
 			let count: number = 0;
@@ -203,7 +234,7 @@ console.log('select:',index,select);
 			{
 				if ( this.hand[ i ].selected() ) { ++count; }
 			}
-			if ( card.selected() || 3 <= count ) { return false; }
+			if ( card.selected() || 3 <= count ) { return Promise.reject( '' ); }
 			card.select( count );
 		} else if( card.selected() )
 		{
@@ -218,7 +249,7 @@ console.log('select:',index,select);
 			card.deselect();
 		}
 
-		return true;
+		return Promise.resolve( 'ok' );
 	}
 
 	private _get( index: number )
@@ -274,11 +305,16 @@ class ActionButtons
 		const d = <HTMLElement>buttons.querySelector( '.crosskey .d' );
 		const w = <HTMLElement>buttons.querySelector( '.crosskey .w' );
 
-		Common.addClick( l, () => { this.move( 8 ); } );
-		Common.addClick( r, () => { this.move( 2 ); } );
-		Common.addClick( u, () => { this.move( 1 ); } );
-		Common.addClick( d, () => { this.move( 4 ); } );
-		Common.addClick( w, () => { dungeon.nextTurn(); } );
+		//Common.addClick( l, () => { this.move( 8 ); } );
+		//Common.addClick( r, () => { this.move( 2 ); } );
+		//Common.addClick( u, () => { this.move( 1 ); } );
+		//Common.addClick( d, () => { this.move( 4 ); } );
+		const wait = () => { dungeon.nextTurn(); }
+		Common.addTap( l, LONG_TAP * 2, () => { this.move( 8 ); }, wait );
+		Common.addTap( r, LONG_TAP * 2, () => { this.move( 2 ); }, wait );
+		Common.addTap( u, LONG_TAP * 2, () => { this.move( 1 ); }, wait );
+		Common.addTap( d, LONG_TAP * 2, () => { this.move( 4 ); }, wait );
+		Common.addClick( w, wait );
 
 		const reload = <HTMLElement>buttons.querySelector( '.reload' );
 		Common.addClick( reload, () => { dungeon.reload(); } );
@@ -305,6 +341,7 @@ class ActionButtons
 
 class Dungeon
 {
+	private main: HTMLElement;
 	private map: HTMLElement;
 	private hand: HTMLElement;
 	private cards: HTMLElement[];
@@ -314,6 +351,7 @@ class Dungeon
 
 	constructor( config: DungeonConfig )
 	{
+		this.main = config.dungeon;
 		this.map = <HTMLElement>config.dungeon.querySelector( '.map' );
 
 		this.hand = <HTMLElement>config.dungeon.querySelector( '.hand' );
@@ -323,6 +361,11 @@ class Dungeon
 		const cards = config.dungeon.querySelectorAll( '.card' );
 		for ( let i = 0 ; i < cards.length ; ++i ) { this.initCardAction( <HTMLElement>cards[ i ], i ); }
 
+	}
+
+	public input( enable: boolean )
+	{
+		this.main.classList[ enable ? 'remove' : 'add' ]( 'disable' );
 	}
 
 	private isFlick( begin: Event, end: Event )
@@ -335,7 +378,7 @@ console.log(flick,flick.direction,Number.isNaN( flick.direction ));
 	public initCardAction( element: HTMLElement, index: number )
 	{
 		this.cards.push( element );
-		Common.addTap( element, 500, ( data ) =>
+		Common.addTap( element, LONG_TAP, ( data ) =>
 		{
 			if ( this.isFlick( data.begin, data.end ) )
 			{
@@ -360,6 +403,7 @@ console.log('Select');
 
 	public init( cm: CardManager )
 	{
+		this.input( false );
 		this.cm = cm;
 		cm.init( this.cards );
 	}
@@ -387,33 +431,45 @@ if ( 3 <= this.cm.selected() ) { this.action(); }
 
 	public nextTurn()
 	{
-		if ( !this.cm.draw() ) { this.reload(); }
-		this.dungeon.update();
+		this.input( false );
+		return this.cm.draw().catch( () =>
+		{
+			return this.cm.empty() ? this.reload() : Promise.resolve();
+		} ).then( () =>
+		{
+			this.dungeon.update();
 this.dungeon._render( this.map );
+			this.input( true );
+			return 'ok';
+		});
 	}
 
 	public reload()
 	{
-		this.cm.reload();
-		this.buttons.update( this.cm );
+		this.input( false );
+		return this.cm.reload().then( () =>
+		{
+			this.buttons.update( this.cm );
+			this.input( true );
+		} );
 	}
 
 	public draw()
 	{
-		if ( this.cm.size() <= 0 )
+		this.input( false );
+		const p = ( this.cm.size() <= 0 ) ? this.cm.drawFull() : this.cm.draw();
+		return p.catch( () => { return ''; } ).then( () =>
 		{
-			this.cm.drawFull();
-		} else
-		{
-			this.cm.draw();
-		}
-		this.buttons.update( this.cm );
+			this.buttons.update( this.cm );
+			this.input( true );
 this.hand.classList.remove( 'hide' );
+		} );
 	}
 
 	public move( direction: number )
 	{
 console.log( 'move:', direction );
+		this.input( false );
 
 
 		if ( this.cm.selected() <= 0 ) { this.cm.select( 0, true ); }
@@ -422,11 +478,16 @@ console.log( 'move:', direction );
 		this.cm.useFirst().then( ( card ) =>
 		{
 console.log(card);
-this.dungeon.action( direction, card );
-if(this.cm.selected() <= 0 ){this.draw();}
+			this.dungeon.action( direction, card );
+			this.dungeon.update( 0 < this.cm.selected() ).then(()=>{
+				if(this.cm.selected() <= 0 ){ this.draw(); }
+				this.input( true );
 this.dungeon._render( this.map );
+			} );
+
 		} ).catch( ( error ) =>
 		{
+			this.input( true );
 console.log(error);
 this.draw();
 this.dungeon._render( this.map );

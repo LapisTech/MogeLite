@@ -48,6 +48,12 @@ section
 	&.show { display: block; }
 }
 
+.scrill
+{
+	-webkit-overflow-scrolling: touch; // iOS
+	scroll-behavior: smooth;
+}
+
 #contents
 {
 	overflow: hidden;
@@ -129,19 +135,80 @@ h1
 .card
 {
 	position: relative;
-	> img
+
+	div
 	{
-		display: block;
+		height: 100%;
 	}
 
-	&.h > img { width: 100%; }
-	&.v > img { height: 100%; }
+	img { display: block; }
+	&.h img { width: 100%; }
+	&.v img { height: 100%; }
+
+	&.fadeout
+	{
+		div
+		{
+			margin-top: 0;
+			opacity: 1;
+		}
+		&.start
+		{
+			div
+			{
+				transition: margin-top @anime-base-time, opacity @anime-base-time, height @anime-base-time;
+				margin-top: -50%;
+				opacity: 0;
+			}
+		}
+		&.end
+		{
+			div { height: 0; }
+		}
+	}
+	&.fadein
+	{
+		div
+		{
+			height: 0;
+			margin-top: -50%;
+			opacity: 0;
+		}
+		&.start
+		{
+			div
+			{
+				transition: margin-top @anime-base-time, opacity @anime-base-time, height @anime-base-time;
+				height: 100%;
+			}
+		}
+		&.end
+		{
+			div
+			{
+				margin-top: 0;
+				opacity: 1;
+			}
+		}
+	}
 }
 
 #dungeon
 {
 	position: relative;
 	height: auto;
+
+	&.disable:after
+	{
+		content: '';
+		display: block;
+		opacity: 0;
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+	}
 
 	> img
 	{
@@ -230,7 +297,7 @@ font-size: 10px;
 			left: 0;
 			width: 100%;
 			height: 100%;
-			background-color: rgba( 0, 0, 0, 0.8 );
+			opacity: 0;
 		}
 	}
 

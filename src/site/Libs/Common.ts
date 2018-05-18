@@ -105,4 +105,12 @@ class Common
 		return list;
 	}
 
+	public static sleep( msec: number )
+	{
+		return new Promise( ( resolve, reject ) =>
+		{
+			setTimeout( resolve, msec );
+		} );
+	}
+
 }

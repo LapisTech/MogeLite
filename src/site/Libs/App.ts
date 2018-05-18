@@ -2,7 +2,7 @@
 /// <reference path="./Common.ts" />
 /// <reference path="./UserData.ts" />
 /// <reference path="./MogeDungeon.ts" />
-
+/// <reference path="./CSSAnime.ts" />
 
 /// <reference path="../View/Top.ts" />
 /// <reference path="../View/Home.ts" />
@@ -92,20 +92,20 @@ class App
 		const deck: CARD_JSON[] = [];
 		// TODO: DECK_CARD { id: number, lv: number, ...params  }
 		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
-		deck.push( { id: 0, cate: 0, name: 'a', data: { lv: [ 1 ] } } );
+		deck.push( { id: 1, cate: 0, name: 'b', data: { lv: [ 1 ] } } );
+		deck.push( { id: 3, cate: 0, name: 'c', data: { lv: [ 1 ] } } );
+		deck.push( { id: 4, cate: 0, name: 'd', data: { lv: [ 1 ] } } );
+		deck.push( { id: 5, cate: 0, name: 'e', data: { lv: [ 1 ] } } );
+		deck.push( { id: 6, cate: 0, name: 'f', data: { lv: [ 1 ] } } );
+		deck.push( { id: 7, cate: 0, name: 'g', data: { lv: [ 1 ] } } );
+		deck.push( { id: 8, cate: 0, name: 'h', data: { lv: [ 1 ] } } );
+		deck.push( { id: 9, cate: 0, name: 'i', data: { lv: [ 1 ] } } );
 
 		const cm = new CardManager( deck );
 
 		this.dungeon.init( cm );
 
-		setTimeout( () => { cm.reload(); }, 1000 );
+		setTimeout( () => { cm.reload().then( () => { this.dungeon.input( true ); } ); }, 500 );
 
 		this.dungeon.render( new MogeDungeon().init() );
 	}
