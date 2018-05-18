@@ -30,6 +30,7 @@ function LoadWLib() {
 class Common {
     static addClick(element, callback) {
         element.addEventListener('click', (event) => {
+            event.preventDefault();
             event.stopPropagation();
             callback(event);
         }, false);

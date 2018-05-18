@@ -4,6 +4,7 @@ class Common
 	{
 		element.addEventListener( 'click', ( event ) =>
 		{
+			event.preventDefault();
 			event.stopPropagation();
 			callback( event );
 		}, false );

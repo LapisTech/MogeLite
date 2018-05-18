@@ -11,6 +11,7 @@
     "build:js": "tsc -p src/site",
     "build:wasm": "asc --noRuntime -o docs/libs.wasm src/wasm/main.ts",
     "build:css": "lessc --clean-css src/style/main.less docs/style.css",
+    "minify": "uglifyjs ./docs/app.js -c --mangle -o ./docs/app.js",
     "localize": "node node_modules/localizecss/dest/localizecss.js -d default",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -26,10 +27,10 @@
   "homepage": "https://github.com/LapisTech/MogeLite#readme",
   "dependencies": {},
   "devDependencies": {
-    "localizecss": "git+https://github.com/HirokiMiyaoka/LocalizeCSS#master",
     "assemblyscript": "^0.3.0",
     "clean-css": "^4.1.11",
-    "uglify-es": "^3.3.9",
-    "less": "^3.0.4"
+    "less": "^3.0.4",
+    "localizecss": "git+https://github.com/HirokiMiyaoka/LocalizeCSS#master",
+    "uglify-es": "^3.3.9"
   }
 }
