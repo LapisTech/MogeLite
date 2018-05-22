@@ -441,7 +441,7 @@ if ( 3 <= this.cm.selected() ) { this.action(); }
 this.dungeon._render( this.map );
 			this.input( true );
 			return 'ok';
-		});
+		} );
 	}
 
 	public reload()
@@ -472,25 +472,29 @@ console.log( 'move:', direction );
 		this.input( false );
 
 
-		if ( this.cm.selected() <= 0 ) { this.cm.select( 0, true ); }
+		const p = ( this.cm.selected() <= 0 ) ? this.cm.select( 0, true ) : Promise.resolve( '' ) ;
 
-
-		this.cm.useFirst().then( ( card ) =>
+		return p.then( () =>
 		{
+			return this.cm.useFirst().then( ( card ) =>
+			{
 console.log(card);
-			this.dungeon.action( direction, card );
-			this.dungeon.update( 0 < this.cm.selected() ).then(()=>{
-				if(this.cm.selected() <= 0 ){ this.draw(); }
-				this.input( true );
-this.dungeon._render( this.map );
+				this.dungeon.action( direction, card );
+				const noselect = this.cm.selected() <= 0;
+				return this.dungeon.update( !noselect ).then( ()=>
+				{
+					return noselect ? this.draw() : Promise.resolve();
+				} );
 			} );
-
 		} ).catch( ( error ) =>
 		{
-			this.input( true );
 console.log(error);
-this.draw();
+			return this.draw();
+		} ).then( () =>
+		{
+			this.input( true );
 this.dungeon._render( this.map );
+			return '';
 		} );
 	}
 
@@ -503,7 +507,7 @@ console.log('show:',index,this.cards[ index ].dataset.card);
 	public render( dungeon: MogeDungeon )
 	{
 		this.dungeon = dungeon;
-
+		this.dungeon.initRender( this.map );
 this.dungeon._render( this.map );
 	}
 }

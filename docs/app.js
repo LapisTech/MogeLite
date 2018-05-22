@@ -677,6 +677,7 @@ var Rogue;
 class MogeDungeon {
     constructor() {
         this.chara = new ActionChara();
+        this.turn = 0;
     }
     init(dungeon) {
         if (!dungeon) {
@@ -684,14 +685,6 @@ class MogeDungeon {
             dungeon.generate(WLib.rand);
         }
         this.setBitmap(dungeon.getCanvas());
-        for (let y = 0; y < this.bitmap.height(); ++y) {
-            for (let x = 0; x < this.bitmap.width(); ++x) {
-                if (this.bitmap.get(x, y)) {
-                    this.chara.setPosition(x, y);
-                    break;
-                }
-            }
-        }
         return this;
     }
     setBitmap(bitmap) { this.bitmap = bitmap; return this; }
@@ -713,15 +706,26 @@ class MogeDungeon {
         }
     }
     update(stop = false) {
-        return Common.sleep(1000);
+        if (!stop) {
+            ++this.turn;
+        }
+        return Common.sleep(100);
+    }
+    initRender(e) {
+        for (let y = 0; y < this.bitmap.height(); ++y) {
+            for (let x = 0; x < this.bitmap.width(); ++x) {
+                if (this.bitmap.get(x, y)) {
+                    const chip = new Chip(x, y);
+                    e.appendChild(chip.render());
+                    this.chara.setPosition(x, y);
+                    break;
+                }
+            }
+        }
     }
     _render(e) {
         const map = this.bitmap.getBits().map((b) => { return b ? '.' : ' '; });
         map[this.chara.y() * this.bitmap.width() + this.chara.x()] = 'c';
-        for (let i = this.bitmap.width() - 1; i < map.length; i += this.bitmap.width()) {
-            map[i] += '\n';
-        }
-        e.innerHTML = '<pre>' + map.join('') + '</pre>';
     }
 }
 class ActionChara {
@@ -746,6 +750,11 @@ class Chip {
         const chip = document.createElement('div');
         chip.style.left = (this.x * 10) + '%';
         chip.style.top = (this.y * 10) + '%';
+        chip.style.width = '10px';
+        chip.style.height = '10px';
+        chip.style.border = '1px solid gray';
+        chip.style.boxSizing = 'border-box';
+        return chip;
     }
 }
 class CSSAnime {
@@ -772,7 +781,7 @@ class CSSAnime {
     continuouslyChangeClass(...argv) {
         return argv.reduce((prev, current) => {
             return prev.then(() => {
-                if (!current.add && !current.remove || current.time) {
+                if ((!current.add && !current.remove) || current.time) {
                     console.log('change class(time):', current);
                     if (current.add) {
                         this.element.classList.add(...current.add);
@@ -1184,24 +1193,23 @@ class Dungeon {
     move(direction) {
         console.log('move:', direction);
         this.input(false);
-        if (this.cm.selected() <= 0) {
-            this.cm.select(0, true);
-        }
-        this.cm.useFirst().then((card) => {
-            console.log(card);
-            this.dungeon.action(direction, card);
-            this.dungeon.update(0 < this.cm.selected()).then(() => {
-                if (this.cm.selected() <= 0) {
-                    this.draw();
-                }
-                this.input(true);
-                this.dungeon._render(this.map);
+        const p = (this.cm.selected() <= 0) ? this.cm.select(0, true) : Promise.resolve('');
+        return p.then(() => {
+            return this.cm.useFirst().then((card) => {
+                console.log(card);
+                this.dungeon.action(direction, card);
+                const noselect = this.cm.selected() <= 0;
+                return this.dungeon.update(!noselect).then(() => {
+                    return noselect ? this.draw() : Promise.resolve();
+                });
             });
         }).catch((error) => {
-            this.input(true);
             console.log(error);
-            this.draw();
+            return this.draw();
+        }).then(() => {
+            this.input(true);
             this.dungeon._render(this.map);
+            return '';
         });
     }
     showCard(index) {
@@ -1212,6 +1220,7 @@ class Dungeon {
     }
     render(dungeon) {
         this.dungeon = dungeon;
+        this.dungeon.initRender(this.map);
         this.dungeon._render(this.map);
     }
 }

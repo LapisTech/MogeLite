@@ -130,7 +130,7 @@ h1 {
   opacity: 1;
 }
 .card.fadeout.start div {
-  transition: margin-top 0.1s, opacity 0.1s, height 0.1s;
+  transition: margin-top 0.05s, opacity 0.05s, height 0.05s;
   margin-top: -50%;
   opacity: 0;
 }
@@ -143,7 +143,7 @@ h1 {
   opacity: 0;
 }
 .card.fadein.start div {
-  transition: margin-top 0.1s, opacity 0.1s, height 0.1s;
+  transition: margin-top 0.05s, opacity 0.05s, height 0.05s;
   height: 100%;
 }
 .card.fadein.end div {

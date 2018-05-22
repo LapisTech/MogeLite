@@ -6,10 +6,12 @@ class MogeDungeon
 	private bitmap: Rogue.BitCanvas;
 	private chara: ActionChara;
 	private map: Chip[];
+	private turn: number;
 
 	constructor()
 	{
 		this.chara = new ActionChara();
+		this.turn = 0;
 	}
 
 	public init( dungeon?: Rogue.Dungeon )
@@ -20,19 +22,6 @@ class MogeDungeon
 			dungeon.generate( WLib.rand );
 		}
 		this.setBitmap( dungeon.getCanvas() );
-
-//TODO:In convert
-for ( let y = 0 ; y < this.bitmap.height() ; ++y )
-{
-	for( let x = 0 ; x < this.bitmap.width() ; ++x )
-	{
-		if ( this.bitmap.get( x, y ) )
-		{
-			this.chara.setPosition( x, y );
-			break;
-		}
-	}
-}
 
 		return this;
 	}
@@ -69,15 +58,36 @@ for ( let y = 0 ; y < this.bitmap.height() ; ++y )
 
 	public update( stop = false )
 	{
-		return Common.sleep( 1000 );
+		if ( !stop ) { ++this.turn; }
+		return Common.sleep( 100 );
+	}
+
+	public initRender( e: HTMLElement )
+	{
+
+//TODO:In convert
+for ( let y = 0 ; y < this.bitmap.height() ; ++y )
+{
+	for( let x = 0 ; x < this.bitmap.width() ; ++x )
+	{
+		if ( this.bitmap.get( x, y ) )
+		{
+			const chip = new Chip( x, y );
+			e.appendChild( chip.render() );
+			this.chara.setPosition( x, y );
+			break;
+		}
+	}
+}
+
 	}
 
 	public _render( e: HTMLElement )
 	{
 		const map: string[] = this.bitmap.getBits().map( ( b ) => { return b ? '.' : ' '; } );
 		map[ this.chara.y() * this.bitmap.width() + this.chara.x() ] = 'c';
-		for ( let i = this.bitmap.width() - 1 ; i < map.length ; i += this.bitmap.width() ) { map[ i ] += '\n'; }
-		e.innerHTML = '<pre>' + map.join( '' ) + '</pre>';
+		//for ( let i = this.bitmap.width() - 1 ; i < map.length ; i += this.bitmap.width() ) { map[ i ] += '\n'; }
+		//e.innerHTML = '<pre>' + this.turn + '\n' + map.join( '' ) + '</pre>';
 	}
 
 }
@@ -120,5 +130,10 @@ class Chip
 		const chip = document.createElement( 'div' );
 		chip.style.left = ( this.x * 10 ) + '%';
 		chip.style.top = ( this.y * 10 ) + '%';
+chip.style.width = '10px';
+chip.style.height = '10px';
+chip.style.border = '1px solid gray';
+chip.style.boxSizing = 'border-box';
+		return chip;
 	}
 }

@@ -32,7 +32,7 @@ class CSSAnime
 		{
 			return prev.then( () =>
 			{
-				if ( !current.add && !current.remove || current.time )
+				if ( ( !current.add && !current.remove ) || current.time )
 				{
 console.log('change class(time):',current);
 					if ( current.add ) { this.element.classList.add( ... current.add ); }
